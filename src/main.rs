@@ -10,13 +10,98 @@ use rawloader::{RawLoader,RawImageData};
 use power_plant::generate_unique_alphanumeric;
 use jixel::{EncodeConfig, encode_image_16bit};
 use imagepipe::Pipeline;
+use slint::{ModelRc, ToSharedString, VecModel};
+use wagahai_lut::{CubeParser, lut::apply_rgb};
+
 
 slint::include_modules!();
 
+fn apply_lut_to_flat_u16(lut_path: &str, pixels: &mut Vec<u16>) -> Result<(), Box<dyn std::error::Error>> {
+    // 1. Parse the .cube file into a CubeLut
+    let lut = CubeParser::from_file(lut_path)?;
+    const MAX_U16: f32 = u16::MAX as f32; // 65535.0
+
+    // Ensure the flat vector length is a multiple of 3 (RGB triplets)
+    assert!(pixels.len() % 3 == 0, "Flat pixel buffer length must be a multiple of 3");
+
+    // 2. Iterate over the flat vector in chunks of 3 [r, g, b] mutably
+    pixels.chunks_exact_mut(3).for_each(|chunk| {
+        // Normalize u16 [0..=65535] to f32 [0.0..=1.0]
+        let norm_r = chunk[0] as f32 / MAX_U16;
+        let norm_g = chunk[1] as f32 / MAX_U16;
+        let norm_b = chunk[2] as f32 / MAX_U16;
+
+        // 3. Evaluate through your LUT evaluation function
+        let out = evaluate_lut(&lut, [norm_r, norm_g, norm_b]);
+
+        // 4. Denormalize, clamp, and write back in-place
+        chunk[0] = (out[0].clamp(0.0, 1.0) * MAX_U16).round() as u16;
+        chunk[1] = (out[1].clamp(0.0, 1.0) * MAX_U16).round() as u16;
+        chunk[2] = (out[2].clamp(0.0, 1.0) * MAX_U16).round() as u16;
+    });
+
+    Ok(())
+}
+fn evaluate_lut(lut: &wagahai_lut::CubeLut, rgb: [f32; 3]) -> [f32; 3] {
+    // Apply domain bounds and 1D/3D interpolation using wagahai_lut structures
+    rgb // placeholder for interpolation evaluation
+}
+fn get_selected_lut() -> String{
+    let settings:Entry = Entry { 
+        db_path:  String::from("./settings"),
+    };
+    let _ = settings.init();
+    match settings.select().view() {
+        Err(_) => {
+            return "".to_string();
+        }
+        Ok(mut object) => {
+            match object.get("selected-lut".to_string()) {
+                Dynamic::String(lut_full_path) => {
+                    return  lut_full_path;
+                }
+                _ => {
+                    return "".to_string();
+                }
+            }
+        }
+    }
+}
+//Main------------------------------------------------------------------
 fn main() -> Result<(), Box<dyn Error>> {
     let ui = AppWindow::new()?;
 
     let ui_handle = ui.as_weak();
+
+    //Load Stored LUTs on app start
+    fn get_luts() -> ModelRc<LUT>{
+        let mut luts:Vec<LUT> = Vec::new();
+        let luts_dir:Directory = Directory { 
+            full_path: "./luts".to_string(),
+         };
+         let contents = luts_dir.list_contents();
+         for content in contents{
+            match content {
+                FileSystemEntity::Directory(_) => {
+
+                }
+                FileSystemEntity::File(file) => {
+                    let last_slash = file.full_path.rfind("/").unwrap() + 1;
+                    let file_name:&str = &file.full_path[last_slash..];
+                    luts.push(LUT { 
+                        full_path: file.full_path.to_shared_string(), 
+                        name: String::from(file_name.to_shared_string()).to_shared_string(),
+                    });
+                }
+            }
+         }
+        return ModelRc::new(VecModel::from(luts));
+    }
+    //App Startup---------------------------------------------
+    ui.set_luts(get_luts());
+    ui.set_selected_lut(get_selected_lut().to_shared_string());
+    //--------------------------------------------------------
+
     ui.on_store_lut(move || {
         let _ = FileDialog::new()
         .add_filter("LUT", &["cube", "3dl", "csp", "look", "lut", "clf", "aml"])
@@ -32,15 +117,18 @@ fn main() -> Result<(), Box<dyn Error>> {
                 lut_file.write_as_bytes(file.read_bytes().unwrap());
             }
         });
+        if let Some(ui) = ui_handle.upgrade() {
+            ui.set_luts(get_luts());
+        }
     });
     ui.on_select_lut(move |selected_lut:LUT| {
-        let settings:Entry =Entry { 
+        let settings:Entry = Entry { 
             db_path:  String::from("./settings"),
         };
         let _ = settings.init();
         let _ = settings.select().insert("selected-lut".to_string(), DbData::Text(selected_lut.full_path.to_string()));
     });
-    ui.on_process_raw_images(move || {
+    ui.on_process_raw_images(move |quality| {
         let _ = FileDialog::new()
         .add_filter("Raw Image", &[
             "mrw",
@@ -67,28 +155,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             "cr2",
             "ari",
         ])
-        .pick_file(|result| {
+        .pick_file(move |result| {
             if let Ok(Some(file)) = result {
-                let settings:Entry = Entry { 
-                    db_path:  String::from("./settings"),
-                };
-                let _ = settings.init();
-                let mut lut_path:String = String::new();
-                match settings.select().view() {
-                    Err(_) => {
-
-                    }
-                    Ok(mut object) => {
-                        match object.get("selected-lut".to_string()) {
-                            Dynamic::String(lut_full_path) => {
-                                lut_path = lut_full_path;
-                            }
-                            _ => {
-
-                            }
-                        }
-                    }
-                }
                 //Read Raw Image
                 match rawloader::decode_file(file.path().unwrap()) {
                     Err(error) => {
@@ -97,12 +165,18 @@ fn main() -> Result<(), Box<dyn Error>> {
                     Ok(raw_image) => {
                         let mut pipeline = Pipeline::new_from_source(imagepipe::ImageSource::Raw(raw_image.clone())).unwrap();
                         let decoded = pipeline.output_16bit(None).unwrap();
-                        let rgb: Vec<u16> = decoded.data;
+                        let mut rgb: Vec<u16> = decoded.data;
                         //Read and apply lut-----------------------------
-                        
+                        let lut_path:String = get_selected_lut();
+                        if lut_path != "".to_string(){
+                            let _ = apply_lut_to_flat_u16(&lut_path, &mut rgb);
+                        }
                         //Save as JPEG XL---------------------------------
-                        // Build the encoder
-                        let config = EncodeConfig::default();
+                        // Build the encoder and pass on the exif data
+                        let config = EncodeConfig::default()
+                        .with_quality(quality)
+                        .with_lossless(true);
+                        //.with_exif();
                         let jxl_bytes = encode_image_16bit(&rgb, decoded.width, decoded.height, &config).unwrap();
                         let new_image_path:String = format!("./output_images/{}.jxl", generate_unique_alphanumeric(40));
                         let new_file:File = File { 
@@ -116,6 +190,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
         });
+    });
+    ui.on_clear_lut_selection(move || {
+        let settings:Entry = Entry { 
+            db_path:  String::from("./settings"),
+        };
+        let _ = settings.init();
+        let _ = settings.select().insert("selected-lut".to_string(), DbData::Text("".to_string()));
     });
     ui.run()?;
 

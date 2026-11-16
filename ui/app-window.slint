@@ -1,4 +1,4 @@
-import { Button, VerticalBox, ScrollView } from "std-widgets.slint";
+import { Button, VerticalBox, ScrollView, Slider } from "std-widgets.slint";
 
 struct LUT {
     name:string,
@@ -13,11 +13,18 @@ component LutWidget inherits TouchArea {
 
 export component AppWindow inherits Window {
     in-out property <[LUT]> luts: [];
+    in-out property <string> selected-lut:"No LUT selected";
+    in-out property <int> files-being-processed:0;
+    in-out property <float> quality:100;
     callback store-lut();
     callback select-lut(lut:LUT);
-    callback process-raw-images();
+    callback process-raw-images(quality:float);
+    callback clear-lut-selection();
 
-    property <bool> luts_page_visible: true;
+    property <bool> luts_page_visible: false;
+
+    width: 500px;
+    height: 500px;
 
     VerticalBox {
         spacing: 20px;
@@ -43,7 +50,18 @@ export component AppWindow inherits Window {
             text: "Process RAW images";
             height: 50px;
             clicked => {
-                process-raw-images();
+                process-raw-images(quality);
+            }
+        }
+        Text {
+            text: "Quality " + quality + "%";
+        }
+        Slider {
+            minimum: 0;
+            maximum: 100;
+            value: quality;
+            changed(value) => {
+                quality = value;
             }
         }
     }
@@ -69,7 +87,7 @@ export component AppWindow inherits Window {
                 }
             }
             Text {
-                text: "No LUT selected";
+                text: selected-lut == "" ? "No LUT selected" : selected-lut;
                 horizontal-alignment: center;
             }
             Button {
@@ -80,11 +98,20 @@ export component AppWindow inherits Window {
                 }
             }
             ScrollView {
-                VerticalLayout {
+                VerticalBox {
+                    spacing: 10px;
+                    Button {
+                        text: "None";
+                        clicked => {
+                            clear-lut-selection();
+                            selected-lut = "No LUT selected";
+                        }
+                    }
                     for lut in luts: LutWidget {
                         lut: lut;
                         clicked => {
                             select-lut(lut);
+                            selected-lut = lut.name;
                         }
                     }
                 }

@@ -15,6 +15,7 @@ rawloader = "0.37.2"
 power_plant = "0.1.1"
 jixel = "0.5.10"
 imagepipe = "0.5.1"
+wagahai_lut = "0.1.0"
 
 [build-dependencies]
 slint-build = "1.19.0"
