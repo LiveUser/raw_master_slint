@@ -1,0 +1,94 @@
+import { Button, VerticalBox, ScrollView } from "std-widgets.slint";
+
+struct LUT {
+    name:string,
+    full_path:string,
+}
+component LutWidget inherits TouchArea {
+    in property <LUT> lut;
+    Text {
+        text: lut.name;
+    }
+}
+
+export component AppWindow inherits Window {
+    in-out property <[LUT]> luts: [];
+    callback store-lut();
+    callback select-lut(lut:LUT);
+    callback process-raw-images();
+
+    property <bool> luts_page_visible: true;
+
+    VerticalBox {
+        spacing: 20px;
+        Rectangle {
+            width: 100%;
+            height: 50px;
+            background: black;
+            Text {
+                text: "Raw Master";
+                color: white;
+            }
+        }
+        
+        Button {
+            text: "LUTs";
+            height: 50px;
+            clicked => {
+                luts_page_visible = true;
+            }
+        }
+
+        Button {
+            text: "Process RAW images";
+            height: 50px;
+            clicked => {
+                process-raw-images();
+            }
+        }
+    }
+    Rectangle {
+        visible: luts_page_visible;
+        background: white;
+        VerticalBox {
+            spacing: 20px;
+            Rectangle {
+                width: 100%;
+                height: 50px;
+                background: black;
+                Text {
+                    text: "Raw Master";
+                    color: white;
+                }
+            }
+            Button {
+                text: "Back";
+                height: 50px;
+                clicked => {
+                    luts_page_visible = false;
+                }
+            }
+            Text {
+                text: "No LUT selected";
+                horizontal-alignment: center;
+            }
+            Button {
+                text: "Add LUT";
+                height: 50px;
+                clicked => {
+                    store_lut();
+                }
+            }
+            ScrollView {
+                VerticalLayout {
+                    for lut in luts: LutWidget {
+                        lut: lut;
+                        clicked => {
+                            select-lut(lut);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
