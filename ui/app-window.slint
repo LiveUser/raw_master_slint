@@ -45,7 +45,10 @@ export component AppWindow inherits Window {
                 luts_page_visible = true;
             }
         }
-
+        Text {
+            text: "Processing: " + files-being-processed + " RAW images";
+            horizontal-alignment: center;
+        }
         Button {
             text: "Process RAW images";
             height: 50px;

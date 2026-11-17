@@ -2,16 +2,16 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::error::Error;
-use robius_file_picker::FileDialog;
 use dart_io::{Directory, File, FileSystemEntity};
-use objective_db::{Entry,DbData,DbError,DbObject};
+use objective_db::{Entry,DbData};
 use easy_bson::Dynamic;
-use rawloader::{RawLoader,RawImageData};
 use power_plant::generate_unique_alphanumeric;
 use jixel::{EncodeConfig, encode_image_16bit};
-use imagepipe::Pipeline;
 use slint::{ModelRc, ToSharedString, VecModel};
-use oximedia_lut::{Lut3d, LutInterpolation, ColorSpace};
+use oximedia_lut::{Lut3d, LutInterpolation};
+use rfd::FileDialog;
+use std::path::Path;
+use rawler::{self, imgop::develop::RawDevelop};
 
 slint::include_modules!();
 
@@ -93,22 +93,41 @@ fn main() -> Result<(), Box<dyn Error>> {
     //--------------------------------------------------------
 
     ui.on_store_lut(move || {
-        let _ = FileDialog::new()
-        .add_filter("LUT", &["cube", "3dl", "csp", "look", "lut", "clf", "aml"])
-        .pick_file(|result| {
-            if let Ok(Some(file)) = result {
-                //Store the LUT file
-                let lut_file:File = File { 
-                    full_path: format!("./luts/{}",file.file_name().unwrap()),
-                };
-                if !lut_file.exists(){
-                    lut_file.create_sync();
-                }
-                lut_file.write_as_bytes(file.read_bytes().unwrap());
+        let files = FileDialog::new()
+        .add_filter("LUT", &[
+            "cube",
+            "3dl",
+            "csp",
+            "look",
+            "lut",
+            "clf",
+            "aml",
+            "CUBE",
+            "3DL",
+            "CSP",
+            "LOOK",
+            "LUT",
+            "CLF",
+            "AML"
+        ]).pick_files().unwrap();
+        for file in files.iter(){
+            let file_path:String = file.to_str().unwrap().to_string();
+            let last_slash_index: usize = file_path.rfind("/").unwrap();
+            let file_name:String = file_path[(last_slash_index + 1)..].to_string();
+            //Store the LUT file
+            let lut_file:File = File { 
+                full_path: format!("./luts/{}",file_name),
+            };
+            if !lut_file.exists(){
+                lut_file.create_sync();
             }
-        });
-        if let Some(ui) = ui_handle.upgrade() {
-            ui.set_luts(get_luts());
+            let selected_file:File = File { 
+                full_path: file_path,
+            };
+            lut_file.write_as_bytes(selected_file.read_as_bytes());
+            if let Some(ui) = ui_handle.upgrade() {
+                ui.set_luts(get_luts());
+            }
         }
     });
     ui.on_select_lut(move |selected_lut:LUT| {
@@ -118,9 +137,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         let _ = settings.init();
         let _ = settings.select().insert("selected-lut".to_string(), DbData::Text(selected_lut.full_path.to_string()));
     });
-    ui.on_process_raw_images(move |quality| {
-        let _ = FileDialog::new()
-        .add_filter("Raw Image", &[
+    ui.on_process_raw_images({
+    let ui_handle = ui.as_weak();
+    move |quality| {
+        let files = FileDialog::new()
+        .add_filter("RAW Image", &[
             "mrw",
             "arw",
             "srf",
@@ -144,44 +165,86 @@ fn main() -> Result<(), Box<dyn Error>> {
             "mos",
             "cr2",
             "ari",
-        ])
-        .pick_file(move |result| {
-            if let Ok(Some(file)) = result {
-                //Read Raw Image
-                match rawloader::decode_file(file.path().unwrap()) {
-                    Err(error) => {
-                        println!("{:?}",error);
+            "MRW",
+            "ARW",
+            "SRF",
+            "SR2",
+            "MEF",
+            "ORF",
+            "SRW",
+            "ERF",
+            "KDC",
+            "DCS",
+            "RW2",
+            "RAF",
+            "DCR",
+            "DNG",
+            "PEF",
+            "CRW",
+            "IIQ",
+            "3FR",
+            "NRW",
+            "NEF",
+            "MOS",
+            "CR2",
+            "ARI"
+        ]).pick_files().unwrap();
+        let ui_handle = ui_handle.clone();
+        let total = files.len() as i32;
+        let _ = ui_handle.upgrade_in_event_loop(move |ui| {
+            let images_being_processed = ui.get_files_being_processed() + total;
+            ui.set_files_being_processed(images_being_processed);
+        });
+        std::thread::spawn(move || {
+            for file in files{
+                let file_path:String = file.to_str().unwrap().to_string();
+                //Load RawImage
+                let path = Path::new(&file_path);
+                let raw_image = match rawler::decode_file(&path) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        eprintln!("Failed to decode {:?}: {e}", path);
+                        let _ = ui_handle.upgrade_in_event_loop(|ui| {
+                            ui.set_files_being_processed(ui.get_files_being_processed() - 1);
+                        });
+                        continue;
                     }
-                    Ok(raw_image) => {
-                        let mut pipeline = Pipeline::new_from_source(imagepipe::ImageSource::Raw(raw_image.clone())).unwrap();
-                        let decoded = pipeline.output_16bit(None).unwrap();
-                        let mut rgb: Vec<u16> = decoded.data;
-                        //Read and apply lut-----------------------------
-                        let lut_path:String = get_selected_lut();
-                        if lut_path != "".to_string(){
-                            let lut = Lut3d::from_file(lut_path).unwrap();
-                            apply_lut_to_16bit_buffer(&lut, &mut rgb);
-                        }
-                        //Save as JPEG XL---------------------------------
-                        // Build the encoder and pass on the exif data
-                        let config = EncodeConfig::default()
-                        .with_quality(quality)
-                        .with_lossless(true);
-                        //.with_exif();
-                        let jxl_bytes = encode_image_16bit(&rgb, decoded.width, decoded.height, &config).unwrap();
-                        let new_image_path:String = format!("./output_images/{}.jxl", generate_unique_alphanumeric(40));
-                        let new_file:File = File { 
-                            full_path: new_image_path,
-                        };
-                        if !new_file.exists(){
-                            new_file.create_sync();
-                        }
-                        new_file.write_as_bytes(jxl_bytes);
-                    }
+                };
+                //Pass onto the pipeline to parse rgb
+                let developer = RawDevelop::default();
+                let developed = developer.develop_intermediate(&raw_image).unwrap();
+                let dynamic_image = developed.to_dynamic_image().unwrap();
+                let mut rgb: Vec<u16> = dynamic_image.as_rgb16().unwrap().clone().to_vec();
+
+                //Read and apply lut-----------------------------
+                let lut_path:String = get_selected_lut();
+                if lut_path != "".to_string(){
+                    let lut = Lut3d::from_file(lut_path).unwrap();
+                    apply_lut_to_16bit_buffer(&lut, &mut rgb);
                 }
+                //Save as JPEG XL---------------------------------
+                // Build the encoder and pass on the exif data
+                let config = EncodeConfig::default()
+                .with_quality(quality)
+                .with_lossless(true);
+                //.with_exif();
+                let jxl_bytes = encode_image_16bit(&rgb, dynamic_image.width() as usize, dynamic_image.height() as usize, &config).unwrap();
+                let new_image_path:String = format!("./output_images/{}.jxl", generate_unique_alphanumeric(40));
+                let new_file:File = File { 
+                    full_path: new_image_path,
+                };
+                if !new_file.exists(){
+                    new_file.create_sync();
+                }
+                new_file.write_as_bytes(jxl_bytes);
+                //Update the UI
+                let _ = ui_handle.upgrade_in_event_loop(|ui| {
+                    let images_being_processed = ui.get_files_being_processed() - 1;
+                    ui.set_files_being_processed(images_being_processed);
+                });
             }
         });
-    });
+    }});
     ui.on_clear_lut_selection(move || {
         let settings:Entry = Entry { 
             db_path:  String::from("./settings"),
