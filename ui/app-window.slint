@@ -87,7 +87,7 @@ export component AppWindow inherits Window {
                 }
             }
             Text {
-                text: selected-lut == "" ? "No LUT selected" : selected-lut;
+                text: selected-lut == "" ? "No LUT selected" : "Selected: " + selected-lut;
                 horizontal-alignment: center;
             }
             Button {

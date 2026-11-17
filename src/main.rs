@@ -101,7 +101,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let lut_file:File = File { 
                     full_path: format!("./luts/{}",file.file_name().unwrap()),
                 };
-                if(!lut_file.exists()){
+                if !lut_file.exists(){
                     lut_file.create_sync();
                 }
                 lut_file.write_as_bytes(file.read_bytes().unwrap());
