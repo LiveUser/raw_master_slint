@@ -11,41 +11,31 @@ use power_plant::generate_unique_alphanumeric;
 use jixel::{EncodeConfig, encode_image_16bit};
 use imagepipe::Pipeline;
 use slint::{ModelRc, ToSharedString, VecModel};
-use wagahai_lut::{CubeParser, lut::apply_rgb};
-
+use oximedia_lut::{Lut3d, LutInterpolation, ColorSpace};
 
 slint::include_modules!();
 
-fn apply_lut_to_flat_u16(lut_path: &str, pixels: &mut Vec<u16>) -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Parse the .cube file into a CubeLut
-    let lut = CubeParser::from_file(lut_path)?;
-    const MAX_U16: f32 = u16::MAX as f32; // 65535.0
+pub fn apply_lut_to_16bit_buffer(lut:&Lut3d, rgb_buffer: &mut [u16]) {
+    const INV_MAX: f64 = 1.0 / 65535.0;
 
-    // Ensure the flat vector length is a multiple of 3 (RGB triplets)
-    assert!(pixels.len() % 3 == 0, "Flat pixel buffer length must be a multiple of 3");
+    for pixel in rgb_buffer.chunks_exact_mut(3) {
+        // 1. Convert u16 [0, 65535] to normalized f64 [0.0, 1.0]
+        let input = [
+            pixel[0] as f64 * INV_MAX,
+            pixel[1] as f64 * INV_MAX,
+            pixel[2] as f64 * INV_MAX,
+        ];
 
-    // 2. Iterate over the flat vector in chunks of 3 [r, g, b] mutably
-    pixels.chunks_exact_mut(3).for_each(|chunk| {
-        // Normalize u16 [0..=65535] to f32 [0.0..=1.0]
-        let norm_r = chunk[0] as f32 / MAX_U16;
-        let norm_g = chunk[1] as f32 / MAX_U16;
-        let norm_b = chunk[2] as f32 / MAX_U16;
+        // 2. Apply LUT using high-quality tetrahedral interpolation
+        let output = lut.apply(&input, LutInterpolation::Tetrahedral);
 
-        // 3. Evaluate through your LUT evaluation function
-        let out = evaluate_lut(&lut, [norm_r, norm_g, norm_b]);
-
-        // 4. Denormalize, clamp, and write back in-place
-        chunk[0] = (out[0].clamp(0.0, 1.0) * MAX_U16).round() as u16;
-        chunk[1] = (out[1].clamp(0.0, 1.0) * MAX_U16).round() as u16;
-        chunk[2] = (out[2].clamp(0.0, 1.0) * MAX_U16).round() as u16;
-    });
-
-    Ok(())
+        // 3. Quantize back to u16 [0, 65535] with safety clamping
+        pixel[0] = (output[0].clamp(0.0, 1.0) * 65535.0).round() as u16;
+        pixel[1] = (output[1].clamp(0.0, 1.0) * 65535.0).round() as u16;
+        pixel[2] = (output[2].clamp(0.0, 1.0) * 65535.0).round() as u16;
+    }
 }
-fn evaluate_lut(lut: &wagahai_lut::CubeLut, rgb: [f32; 3]) -> [f32; 3] {
-    // Apply domain bounds and 1D/3D interpolation using wagahai_lut structures
-    rgb // placeholder for interpolation evaluation
-}
+
 fn get_selected_lut() -> String{
     let settings:Entry = Entry { 
         db_path:  String::from("./settings"),
@@ -169,7 +159,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                         //Read and apply lut-----------------------------
                         let lut_path:String = get_selected_lut();
                         if lut_path != "".to_string(){
-                            let _ = apply_lut_to_flat_u16(&lut_path, &mut rgb);
+                            let lut = Lut3d::from_file(lut_path).unwrap();
+                            apply_lut_to_16bit_buffer(&lut, &mut rgb);
                         }
                         //Save as JPEG XL---------------------------------
                         // Build the encoder and pass on the exif data

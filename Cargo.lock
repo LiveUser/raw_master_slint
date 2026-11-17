@@ -628,6 +628,9 @@ name = "bitflags"
 version = "2.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
+dependencies = [
+ "serde_core",
+]
 
 [[package]]
 name = "bitstream-io"
@@ -1438,18 +1441,6 @@ dependencies = [
  "rayon-core",
  "smallvec",
  "zune-inflate",
-]
-
-[[package]]
-name = "fast_image_resize"
-version = "6.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9c50201dc184ba6553da1695aac20a042efffbe2d84542cee31917c86c3ab1e"
-dependencies = [
- "cfg-if",
- "document-features",
- "num-traits",
- "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -2540,7 +2531,7 @@ dependencies = [
  "exr",
  "gif",
  "image-webp",
- "moxcms",
+ "moxcms 0.8.1",
  "num-traits",
  "png",
  "qoi",
@@ -3107,6 +3098,16 @@ name = "moxcms"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
+dependencies = [
+ "num-traits",
+ "pxfm",
+]
+
+[[package]]
+name = "moxcms"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "561875e11b3d8618524f974f85e4bbd05a64a112b8f7541ffcc236b5166c0564"
 dependencies = [
  "num-traits",
  "pxfm",
@@ -3781,6 +3782,55 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "36820e9051aca1014ddc75770aab4d68bc1e9e632f0f5627c4086bc216fb583b"
 dependencies = [
  "ttf-parser",
+]
+
+[[package]]
+name = "oximedia-core"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f2d8bde14f183cb87532586e5302646c0ba4ae9e6cb5cc49cb48a565d18f832"
+dependencies = [
+ "bitflags 2.13.2",
+ "crossbeam-deque",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "oximedia-lut"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a8c8a79490e7a95ad75531fc2921fb6f9d55dc9c477a069400f1a1b2bdc344e"
+dependencies = [
+ "nom 8.0.0",
+ "oximedia-core",
+ "oxixml-quickxml-compat",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "oxixml-quickxml-compat"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e06d32611a6014e2208b64e0054b6c7661a839df15f018d02b720d02ea31806"
+dependencies = [
+ "oxixml-xml",
+]
+
+[[package]]
+name = "oxixml-support"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "822ab227407d022b23cba7e0f58d9dcb31851636983f6b9852c69fa2b658bd52"
+
+[[package]]
+name = "oxixml-xml"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0397a4a82dc1e65bc2392afdac9a4a134f2a7d1acedf461ecfeee3464a6ea52c"
+dependencies = [
+ "oxixml-support",
 ]
 
 [[package]]
@@ -4656,15 +4706,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
-name = "safe_arch"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42c6efa15875e6ecb39ca61fb0b0c1a40b84fac5a5ffe71eef7d1000c8eb3f5f"
-dependencies = [
- "bytemuck",
-]
-
-[[package]]
 name = "same-file"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4954,13 +4995,14 @@ dependencies = [
  "easy_bson",
  "imagepipe",
  "jixel",
+ "moxcms 0.9.2",
  "objective_db",
+ "oximedia-lut",
  "power_plant",
  "rawloader",
  "robius-file-picker",
  "slint",
  "slint-build",
- "wagahai_lut",
 ]
 
 [[package]]
@@ -5779,19 +5821,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wagahai_lut"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93eb3d446e7453144a85b38c9cd425a4a9f20aaeafbb3b9c5112bb54bba96ef0"
-dependencies = [
- "fast_image_resize",
- "image",
- "num-traits",
- "thiserror 2.0.21",
- "wide",
-]
-
-[[package]]
 name = "walkdir"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6186,16 +6215,6 @@ dependencies = [
  "naga-types",
  "raw-window-handle",
  "static_assertions",
-]
-
-[[package]]
-name = "wide"
-version = "1.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d920ac99c3c8edce110cb8d07dbb324d6d026011dce85b1e9355b70f0adacc4f"
-dependencies = [
- "bytemuck",
- "safe_arch",
 ]
 
 [[package]]
