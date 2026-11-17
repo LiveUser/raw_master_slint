@@ -23,9 +23,6 @@ export component AppWindow inherits Window {
 
     property <bool> luts_page_visible: false;
 
-    width: 500px;
-    height: 500px;
-
     VerticalBox {
         spacing: 20px;
         Rectangle {
@@ -109,9 +106,11 @@ export component AppWindow inherits Window {
                             clear-lut-selection();
                             selected-lut = "No LUT selected";
                         }
+                        height: 50px;
                     }
                     for lut in luts: LutWidget {
                         lut: lut;
+                        height: 50px;
                         clicked => {
                             select-lut(lut);
                             selected-lut = lut.name;

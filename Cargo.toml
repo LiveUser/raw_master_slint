@@ -29,3 +29,7 @@ identifier = "com.rawware.raw_master"
 formats = ["appimage"]
 icons = ["icons/icon.png"]
 before-packaging-command = "cargo build --release"
+
+[package.metadata.appimage]
+auto_link = true
+icon = "icons/icon.png"
