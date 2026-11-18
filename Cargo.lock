@@ -4844,7 +4844,7 @@ dependencies = [
 
 [[package]]
 name = "slint-rust-template"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "dart_io",
  "easy_bson",
