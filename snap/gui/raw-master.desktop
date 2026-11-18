@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Raw Master
+Comment=RAW image to JPEG XL converter utility
+Exec=raw-master
+Icon=${SNAP}/meta/gui/icon.png
+Terminal=false
+Type=Application
+Categories=Graphics;Photography;

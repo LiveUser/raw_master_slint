@@ -11,23 +11,12 @@ issues: https://github.com/LiveUser/raw_master_slint/issues
 source-code: https://github.com/LiveUser/raw_master_slint
 website: https://sites.google.com/view/radames-valentin
 
-icon: icons/icon.png
+icon: icon.png
 grade: stable
 confinement: strict
-
-apps:
-  raw-master:
-    command: bin/raw-master
-    plugs:
-      - network
-      - home
 
 parts:
   raw-master:
     plugin: rust
     source: .
-    build-packages:
-      - pkg-config
-      - libfontconfig1-dev
-    stage-packages:
-      - libfontconfig1
+
