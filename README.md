@@ -17,6 +17,10 @@ cargo run
 ~~~
 cargo packager --release
 ~~~
+## Packaging
+~~~
+APPIMAGE_EXTRACT_AND_RUN=1 cargo appimage
+~~~
 # Where to find LUTs
 - [Leica LUTs](https://leica-camera.com/en-int/photography/cameras/sl/sl3-s-black/downloads?srsltid=AYCX9vIelYamA3VO_I0LFmBO5lU0xSk8op_RyNSrUiBiG1JKfXcD70YB)
 - [Fresh LUTs](https://freshluts.com/)
