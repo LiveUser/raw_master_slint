@@ -1,4 +1,4 @@
-import { Button, VerticalBox, ScrollView, Slider } from "std-widgets.slint";
+import { Button, VerticalBox, ScrollView, Slider, CheckBox } from "std-widgets.slint";
 
 struct LUT {
     name:string,
@@ -16,9 +16,10 @@ export component AppWindow inherits Window {
     in-out property <string> selected-lut:"No LUT selected";
     in-out property <int> files-being-processed:0;
     in-out property <float> quality:100;
+    property <bool> lossless_compression:true;
     callback store-lut();
     callback select-lut(lut:LUT);
-    callback process-raw-images(quality:float);
+    callback process-raw-images(quality:float,lossless_compression:bool);
     callback clear-lut-selection();
 
     property <bool> luts_page_visible: false;
@@ -50,7 +51,16 @@ export component AppWindow inherits Window {
             text: "Process RAW images";
             height: 50px;
             clicked => {
-                process-raw-images(quality);
+                process-raw-images(quality, lossless_compression);
+            }
+        }
+        HorizontalLayout {
+            spacing: 10px;
+            CheckBox {
+                checked <=> root.lossless_compression;
+            }
+            Text {
+                text: "Lossless Compression";
             }
         }
         Text {
@@ -59,7 +69,7 @@ export component AppWindow inherits Window {
         Slider {
             minimum: 0;
             maximum: 100;
-            value: quality;
+            value <=> quality;
             changed(value) => {
                 quality = value;
             }

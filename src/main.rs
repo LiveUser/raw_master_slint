@@ -1,7 +1,7 @@
 // Prevent console window in addition to Slint window in Windows release builds when, e.g., starting the app via file manager. Ignored on other platforms.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::error::Error;
+use std::{error::Error};
 use dart_io::{Directory, File, FileSystemEntity};
 use objective_db::{Entry,DbData};
 use easy_bson::Dynamic;
@@ -11,7 +11,9 @@ use slint::{ModelRc, ToSharedString, VecModel};
 use oximedia_lut::{Lut3d, LutInterpolation};
 use rfd::FileDialog;
 use std::path::Path;
-use rawler::{self, imgop::develop::RawDevelop};
+use rawler::{self, imgop::develop::RawDevelop, decoders::RawDecodeParams, rawsource::RawSource};
+use little_exif::{metadata::Metadata,filetype::FileExtension,exif_tag::ExifTag};
+use little_exif::rational::{iR64, uR64};
 
 slint::include_modules!();
 
@@ -139,55 +141,46 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
     ui.on_process_raw_images({
     let ui_handle = ui.as_weak();
-    move |quality| {
+    move |quality, lossless_compression| {
         let files = FileDialog::new()
         .add_filter("RAW Image", &[
-            "mrw",
-            "arw",
-            "srf",
-            "sr2",
-            "mef",
-            "orf",
-            "srw",
-            "erf",
-            "kdc",
-            "dcs",
-            "rw2",
-            "raf",
-            "dcr",
-            "dng",
-            "pef",
-            "crw",
-            "iiq",
-            "3fr",
-            "nrw",
-            "nef",
-            "mos",
-            "cr2",
-            "ari",
-            "MRW",
-            "ARW",
-            "SRF",
-            "SR2",
-            "MEF",
-            "ORF",
-            "SRW",
-            "ERF",
-            "KDC",
-            "DCS",
-            "RW2",
-            "RAF",
-            "DCR",
-            "DNG",
-            "PEF",
-            "CRW",
-            "IIQ",
-            "3FR",
-            "NRW",
-            "NEF",
-            "MOS",
-            "CR2",
-            "ARI"
+          "mrw", "MRW",
+          "arw", "ARW",
+          "srf", "SRF",
+          "sr2", "SR2",
+          "mef", "MEF",
+          "orf", "ORF",
+          "srw", "SRW",
+          "erf", "ERF",
+          "kdc", "KDC",
+          "dcs", "DCS",
+          "rw2", "RW2",
+          "raf", "RAF",
+          "dcr", "DCR",
+          "dng", "DNG",
+          "pef", "PEF",
+          "crw", "CRW",
+          "iiq", "IIQ",
+          "3fr", "3FR",
+          "nrw", "NRW",
+          "nef", "NEF",
+          "mos", "MOS",
+          "cr2", "CR2",
+          "cr3", "CR3",
+          "ari", "ARI",
+          "cap", "CAP",
+          "eip", "EIP",
+          "fff", "FFF",
+          "ptx", "PTX",
+          "pxn", "PXN",
+          "r3d", "R3D",
+          "rwl", "RWL",
+          "x3f", "X3F",
+          "bay", "BAY",
+          "cbq", "CBQ",
+          "data", "DATA",
+          "drf", "DRF",
+          "dsc", "DSC"
         ]).pick_files().unwrap();
         let ui_handle = ui_handle.clone();
         let total = files.len() as i32;
@@ -223,10 +216,63 @@ fn main() -> Result<(), Box<dyn Error>> {
                     apply_lut_to_16bit_buffer(&lut, &mut rgb);
                 }
                 //Save as JPEG XL---------------------------------
+                //Raw file metadata----
+                let src = RawSource::new(&path).unwrap();
+                let decoder = rawler::get_decoder(&src).unwrap();
+                let meta = decoder.raw_metadata(&src, &RawDecodeParams::default()).unwrap();
+                let exif = &meta.exif;
+                //New metadata-------
+                let mut file_metadata = Metadata::new();
+                file_metadata.set_tag(ExifTag::Make(raw_image.make.clone()));
+                file_metadata.set_tag(ExifTag::Model(raw_image.model.clone()));
+                file_metadata.set_tag(ExifTag::ImageWidth(vec![dynamic_image.width()]));
+                file_metadata.set_tag(ExifTag::ImageHeight(vec![dynamic_image.height()]));
+                file_metadata.set_tag(ExifTag::Orientation(vec![1]));
+
+                if let Some(v) = &exif.artist { file_metadata.set_tag(ExifTag::Artist(v.clone())); }
+                if let Some(v) = &exif.copyright { file_metadata.set_tag(ExifTag::Copyright(v.clone())); }
+                if let Some(v) = &exif.lens_make { file_metadata.set_tag(ExifTag::LensMake(v.clone())); }
+                if let Some(v) = &exif.lens_model { file_metadata.set_tag(ExifTag::LensModel(v.clone())); }
+                if let Some(v) = &exif.serial_number { file_metadata.set_tag(ExifTag::SerialNumber(v.clone())); }
+                if let Some(v) = &exif.date_time_original { file_metadata.set_tag(ExifTag::DateTimeOriginal(v.clone())); }
+                if let Some(v) = &exif.create_date { file_metadata.set_tag(ExifTag::CreateDate(v.clone())); }
+
+                if let Some(r) = &exif.exposure_time {
+                    file_metadata.set_tag(ExifTag::ExposureTime(vec![uR64 { nominator: r.n, denominator: r.d }]));
+                }
+                if let Some(r) = &exif.fnumber {
+                    file_metadata.set_tag(ExifTag::FNumber(vec![uR64 { nominator: r.n, denominator: r.d }]));
+                }
+                if let Some(r) = &exif.focal_length {
+                    file_metadata.set_tag(ExifTag::FocalLength(vec![uR64 { nominator: r.n, denominator: r.d }]));
+                }
+                if let Some(r) = &exif.aperture_value {
+                    file_metadata.set_tag(ExifTag::ApertureValue(vec![uR64 { nominator: r.n, denominator: r.d }]));
+                }
+                if let Some(r) = &exif.brightness_value {
+                    file_metadata.set_tag(ExifTag::BrightnessValue(vec![iR64 { nominator: r.n, denominator: r.d }]));
+                }
+                if let Some(r) = &exif.exposure_bias {
+                    file_metadata.set_tag(ExifTag::ExposureCompensation(vec![iR64 { nominator: r.n, denominator: r.d }]));
+                }
+
+                if let Some(v) = exif.iso_speed { file_metadata.set_tag(ExifTag::ISO(vec![v as u16])); }
+                if let Some(v) = exif.exposure_program { file_metadata.set_tag(ExifTag::ExposureProgram(vec![v])); }
+                if let Some(v) = exif.metering_mode { file_metadata.set_tag(ExifTag::MeteringMode(vec![v])); }
+                if let Some(v) = exif.flash { file_metadata.set_tag(ExifTag::Flash(vec![v])); }
+                if let Some(v) = exif.white_balance { file_metadata.set_tag(ExifTag::WhiteBalance(vec![v])); }
+                // Slice off any JPEG framing (ff e1, length, "Exif\0\0") so only the bare TIFF block remains
+                let exif_bytes = file_metadata.as_u8_vec(FileExtension::JPEG).unwrap();
+                let start = exif_bytes
+                    .windows(4)
+                    .position(|w| w == b"II*\0" || w == b"MM\0*")
+                    .unwrap_or(0);
+                let tiff_block = exif_bytes[start..].to_vec();
                 // Build the encoder and pass on the exif data
                 let config = EncodeConfig::default()
+                .with_exif(tiff_block)
                 .with_quality(quality)
-                .with_lossless(true);
+                .with_lossless(lossless_compression);
                 //.with_exif();
                 let jxl_bytes = encode_image_16bit(&rgb, dynamic_image.width() as usize, dynamic_image.height() as usize, &config).unwrap();
                 let new_image_path:String = format!("./output_images/{}.jxl", generate_unique_alphanumeric(40));
