@@ -1,6 +1,6 @@
 name: raw-master
 base: core24
-version: '0.1.2'
+version: '0.1.3'
 summary: RAW image to JPEG XL converter utility
 title: Raw Master
 description: |
