@@ -1,6 +1,7 @@
 // Prevent console window in addition to Slint window in Windows release builds when, e.g., starting the app via file manager. Ignored on other platforms.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::fmt::format;
 use std::{error::Error};
 use dart_io::{Directory, File, FileSystemEntity};
 use objective_db::{Entry,DbData};
@@ -14,6 +15,8 @@ use std::path::Path;
 use rawler::{self, imgop::develop::RawDevelop, decoders::RawDecodeParams, rawsource::RawSource};
 use little_exif::{metadata::Metadata,filetype::FileExtension,exif_tag::ExifTag};
 use little_exif::rational::{iR64, uR64};
+use snapcraft::snap_user_data;
+use path_opener::{open_default};
 
 slint::include_modules!();
 
@@ -39,8 +42,9 @@ pub fn apply_lut_to_16bit_buffer(lut:&Lut3d, rgb_buffer: &mut [u16]) {
 }
 
 fn get_selected_lut() -> String{
+    let app_data_folder = snap_user_data().unwrap().to_string_lossy().to_string();
     let settings:Entry = Entry { 
-        db_path:  String::from("./settings"),
+        db_path:  String::from(format!("{}/settings",app_data_folder)),
     };
     let _ = settings.init();
     match settings.select().view() {
@@ -61,15 +65,17 @@ fn get_selected_lut() -> String{
 }
 //Main------------------------------------------------------------------
 fn main() -> Result<(), Box<dyn Error>> {
+
     let ui = AppWindow::new()?;
 
     let ui_handle = ui.as_weak();
 
     //Load Stored LUTs on app start
     fn get_luts() -> ModelRc<LUT>{
+        let app_data_folder = snap_user_data().unwrap().to_string_lossy().to_string();
         let mut luts:Vec<LUT> = Vec::new();
         let luts_dir:Directory = Directory { 
-            full_path: "./luts".to_string(),
+            full_path: format!("{}/luts", app_data_folder),
          };
          let contents = luts_dir.list_contents();
          for content in contents{
@@ -95,6 +101,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     //--------------------------------------------------------
 
     ui.on_store_lut(move || {
+        let app_data_folder = snap_user_data().unwrap().to_string_lossy().to_string();
         let files = FileDialog::new()
         .add_filter("LUT", &[
             "cube",
@@ -118,7 +125,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let file_name:String = file_path[(last_slash_index + 1)..].to_string();
             //Store the LUT file
             let lut_file:File = File { 
-                full_path: format!("./luts/{}",file_name),
+                full_path: format!("{}/luts/{}",app_data_folder,file_name),
             };
             if !lut_file.exists(){
                 lut_file.create_sync();
@@ -133,8 +140,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     });
     ui.on_select_lut(move |selected_lut:LUT| {
+        let app_data_folder = snap_user_data().unwrap().to_string_lossy().to_string();
         let settings:Entry = Entry { 
-            db_path:  String::from("./settings"),
+            db_path:  String::from(format!("{}/settings",app_data_folder)),
         };
         let _ = settings.init();
         let _ = settings.select().insert("selected-lut".to_string(), DbData::Text(selected_lut.full_path.to_string()));
@@ -189,6 +197,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             ui.set_files_being_processed(images_being_processed);
         });
         std::thread::spawn(move || {
+            let app_data_folder = snap_user_data().unwrap().to_string_lossy().to_string();
             for file in files{
                 let file_path:String = file.to_str().unwrap().to_string();
                 //Load RawImage
@@ -275,7 +284,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .with_lossless(lossless_compression);
                 //.with_exif();
                 let jxl_bytes = encode_image_16bit(&rgb, dynamic_image.width() as usize, dynamic_image.height() as usize, &config).unwrap();
-                let new_image_path:String = format!("./output_images/{}.jxl", generate_unique_alphanumeric(40));
+                let new_image_path:String = format!("{}/output_images/{}.jxl", app_data_folder, generate_unique_alphanumeric(40));
                 let new_file:File = File { 
                     full_path: new_image_path,
                 };
@@ -292,11 +301,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         });
     }});
     ui.on_clear_lut_selection(move || {
+        let app_data_folder = snap_user_data().unwrap().to_string_lossy().to_string();
         let settings:Entry = Entry { 
-            db_path:  String::from("./settings"),
+            db_path:  String::from(format!("{}/settings",app_data_folder)),
         };
         let _ = settings.init();
         let _ = settings.select().insert("selected-lut".to_string(), DbData::Text("".to_string()));
+    });
+    ui.on_view_output_folder(move || {
+        let app_data_folder = snap_user_data().unwrap().to_string_lossy().to_string();
+        let _ = open_default(&app_data_folder);
     });
     ui.run()?;
 

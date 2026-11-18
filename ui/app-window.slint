@@ -21,6 +21,7 @@ export component AppWindow inherits Window {
     callback select-lut(lut:LUT);
     callback process-raw-images(quality:float,lossless_compression:bool);
     callback clear-lut-selection();
+    callback view-output-folder();
 
     property <bool> luts_page_visible: false;
 
@@ -72,6 +73,12 @@ export component AppWindow inherits Window {
             value <=> quality;
             changed(value) => {
                 quality = value;
+            }
+        }
+        Button {
+            text: "View Output";
+            clicked => {
+                view-output-folder();
             }
         }
     }

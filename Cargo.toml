@@ -1,5 +1,5 @@
 [package]
-name = "slint-rust-template"
+name = "raw-master"
 version = "0.1.2"
 edition = "2024"
 
@@ -16,6 +16,8 @@ oximedia-lut = "0.2.1"
 rawler = "0.8.0"
 rfd = "0.18.0"
 little_exif = "0.6.23"
+snapcraft = "1.0.0"
+path-opener = "0.5.1"
 
 [build-dependencies]
 slint-build = "1.19.0"

@@ -1,0 +1,33 @@
+name: raw-master
+base: core24
+version: '0.1.2'
+summary: RAW image to JPEG XL converter utility
+title: Raw Master
+description: |
+  A RAW image to JPEG XL converter capable of applying LUTs to the output images.
+contact: radamesvalentinreyes@gmail.com
+license: MIT
+issues: https://github.com/LiveUser/raw_master_slint/issues
+source-code: https://github.com/LiveUser/raw_master_slint
+website: https://sites.google.com/view/radames-valentin
+
+icon: icons/icon.png
+grade: stable
+confinement: classic
+
+apps:
+  raw-master:
+    command: bin/raw-master
+    plugs:
+      - network
+      - home
+
+parts:
+  raw-master:
+    plugin: rust
+    source: .
+    build-packages:
+      - pkg-config
+      - libfontconfig1-dev
+    stage-packages:
+      - libfontconfig1
